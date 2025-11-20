@@ -218,6 +218,7 @@ def page_chat():
     # Init chat storage
     if "chat" not in st.session_state:
         st.session_state.chat = []     # list of (role, msg, ts)
+        
 
     # --------------------- CHAT HISTORY (TOP) ---------------------
     def render_chat():
@@ -243,6 +244,7 @@ def page_chat():
             border-radius: 12px;
             border-bottom-left-radius: 4px;
             white-space: pre-wrap;
+            width: 100%;
         }
         .bubble-right {
             background: #0b7bdc;
@@ -315,21 +317,40 @@ def page_chat():
             try:
                 r = rag_answer(st.session_state.token, msg)
                 answer = r.json().get("answer", "No response")
+
+                # NEW: extract metrics
+                metrics = r.json().get("metrics", {})
+                avg_sim = metrics.get("avg_similarity")
+                halluc_rate = metrics.get("hallucination_rate")
+
+                # Prepare metrics bubble text
+                metrics_text = f"Metrics:\n Avg Similarity: {avg_sim:.3f}, Hallucination Rate: {halluc_rate:.3f}"
+
+                answer += f"\n\n{metrics_text}"
             except Exception as e:
                 answer = f"[Error] {e}"
+                metrics_text = None
 
-        # store assistant message
+        # # Store AI text message
         st.session_state.chat.append(("assistant", answer, time.strftime("%H:%M:%S")))
+
+        # # Store metrics as separate bubble (optional but recommended)
+        # if metrics_text:
+        #     st.session_state.chat.append(("assistant", metrics_text, time.strftime("%H:%M:%S")))
+
+        # else:
+        #     st.session_state.chat.append(("assistant", answer, time.strftime("%H:%M:%S")))
 
         # rerun to render updated chat (input cleared by form automatically)
         st.rerun()
+
 
 
 # -------------------------
 # OCR / Summarize / Format / Search pages (simple)
 # -------------------------
 def page_ocr():
-    sticky_title("🖹 OCR / Extract Text")
+    sticky_title("OCR / Extract Text")
     res = list_documents(st.session_state.token)
     docs = res.json().get("documents", []) if res.status_code==200 else []
     doc_map = {d["filename"]: d["id"] for d in docs}

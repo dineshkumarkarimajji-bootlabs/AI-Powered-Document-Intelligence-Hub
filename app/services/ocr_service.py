@@ -11,7 +11,7 @@ def extract_text(path: str):
     ext = Path(path).suffix.lower()
 
     # Handle PDF safely
-    if ext == ".pdf":
+    if ext == ".pdf" or ext == ".docx":
         try:
             reader_pdf = PdfReader(path)
             text = "\n".join([page.extract_text() or "" for page in reader_pdf.pages])
