@@ -1,3 +1,4 @@
+# app_frontend.py (replace your current Streamlit file with this)
 import time
 import html as html_lib
 import streamlit as st
@@ -6,8 +7,9 @@ from utils.api import (
     login, signup, upload_file, list_documents, delete_doc,
     rag_answer, extract_text, search_similarity, summarize, format_text,
     create_chat_session, list_chat_sessions, get_chat_messages, save_chat_message,
-    update_chat_title, delete_chat_session
+    update_chat_title, delete_chat_session, refresh_access
 )
+
 st.set_page_config(page_title="AI-Powered Document Intelligence Hub", layout="wide")
 
 # -------------------------
@@ -15,16 +17,20 @@ st.set_page_config(page_title="AI-Powered Document Intelligence Hub", layout="wi
 # -------------------------
 if "token" not in st.session_state:
     st.session_state.token = None
+if "refresh_token" not in st.session_state:
+    st.session_state.refresh_token = None
 if "mode" not in st.session_state:
     st.session_state.mode = None
 if "page" not in st.session_state:
     st.session_state.page = "login"   # login, documents, chat, ocr, summarize, format, search
 if "chat" not in st.session_state:
-    st.session_state.chat = []        # list of (role, text, iso_ts)
+    st.session_state.chat = []        # list of dicts {role, content, timestamp}
 if "username" not in st.session_state:
     st.session_state.username = None
 if "email" not in st.session_state:
     st.session_state.email = None
+if "current_chat" not in st.session_state:
+    st.session_state.current_chat = None
 
 # -------------------------
 # Helper: show mode banner
@@ -48,11 +54,81 @@ def show_mode_banner():
             unsafe_allow_html=True,
         )
 
+# -------------------------
+# Token refresh + retry helper
+# -------------------------
+def _try_refresh_and_update():
+    """
+    Use st.session_state.refresh_token to call backend refresh endpoint.
+    If successful, update st.session_state.token (and refresh_token if provided by backend).
+    Returns True if refresh succeeded, False otherwise.
+    """
+    refresh_tok = st.session_state.get("refresh_token")
+    if not refresh_tok:
+        return False
+
+    resp = refresh_access(refresh_tok)
+    if resp is None:
+        return False
+
+    if resp.status_code == 200:
+        data = resp.json()
+        new_access = data.get("access_token")
+        new_refresh = data.get("refresh_token")
+        if new_access:
+            st.session_state.token = new_access
+        if new_refresh:
+            st.session_state.refresh_token = new_refresh
+        return True
+    else:
+        # Refresh failed — clear auth state
+        st.session_state.token = None
+        st.session_state.refresh_token = None
+        st.session_state.mode = None
+        st.session_state.username = None
+        st.session_state.email = None
+        return False
+
+def call_with_refresh(func, *args, **kwargs):
+    """
+    Wrapper for calling utils.api functions which expect token as first positional arg.
+    Usage:
+      call_with_refresh(list_documents)
+      call_with_refresh(upload_file, file_obj)
+      call_with_refresh(get_chat_messages, session_id)
+    Behavior:
+      - Calls func(token, *args, **kwargs)
+      - If response.status_code == 401, attempts refresh once and retries
+      - Returns the response object (or None on internal failure)
+    """
+    token = st.session_state.get("token")
+    try:
+        resp = func(token, *args, **kwargs)
+    except Exception as e:
+        # Could not call function (network error etc.)
+        return None
+
+    # If unauthorized -> attempt refresh once
+    try:
+        status = getattr(resp, "status_code", None)
+    except Exception:
+        status = None
+
+    if status == 401:
+        refreshed = _try_refresh_and_update()
+        if not refreshed:
+            return resp  # still 401; let caller handle (usually show login)
+        # retry once with updated token
+        token = st.session_state.get("token")
+        try:
+            resp = func(token, *args, **kwargs)
+        except Exception:
+            return None
+    return resp
 
 # -------------------------
 def sidebar_nav():
     st.sidebar.title("Docs AI")
-
 
     # ---- Updated CSS (Streamlit 1.30+ compatible) ----
     st.sidebar.markdown("""
@@ -100,23 +176,23 @@ def sidebar_nav():
 
         # New chat button
         if st.sidebar.button("➕ New Chat", key="new_chat_btn"):
-            resp = create_chat_session(st.session_state.token)
-            if resp.status_code == 200:
+            resp = call_with_refresh(create_chat_session)
+            if resp and resp.status_code == 200:
                 st.session_state.current_chat = resp.json()["session_id"]
                 st.session_state.page = "chat"
                 st.rerun()
             else:
-                print("DEBUG CREATE SESSION:", resp.status_code, resp.text)   # <--- ADD THIS
-
+                # debug info
+                st.error("Unable to create session. Please log in again.")
+                st.session_state.token = None
+                st.session_state.refresh_token = None
 
         # Load sessions
-        resp = list_chat_sessions(st.session_state.token)
-        if resp.status_code == 200:
+        resp = call_with_refresh(list_chat_sessions)
+        if resp and resp.status_code == 200:
             sessions = resp.json()
-
             # limit to latest 4 chats
             sessions = sessions[:4]
-
             for s in sessions:
                 col1, col2 = st.sidebar.columns([4, 1])
 
@@ -128,15 +204,13 @@ def sidebar_nav():
 
                 # Delete button
                 if col2.button("🗑️", key=f"del_chat_{s['id']}"):
-                    delete_chat_session(st.session_state.token, s["id"])
-
-                    # If deleting the currently open chat → reset
-                    if "current_chat" in st.session_state and st.session_state.current_chat == s["id"]:
-                        st.session_state.current_chat = None
-
-                    st.rerun()
-
-
+                    delete_resp = call_with_refresh(delete_chat_session, s["id"])
+                    if delete_resp and delete_resp.status_code == 200:
+                        if "current_chat" in st.session_state and st.session_state.current_chat == s["id"]:
+                            st.session_state.current_chat = None
+                        st.rerun()
+                    else:
+                        st.error("Failed to delete chat session")
 
     st.sidebar.markdown("<div style='height:130px'></div>", unsafe_allow_html=True)
 
@@ -144,9 +218,8 @@ def sidebar_nav():
         show_mode_banner()
         if st.sidebar.button("Logout", key="nav_logout_btn"):
             do_logout()
-# -------------------------
-    
 
+# -------------------------
 def sticky_title(title_text):
     st.markdown(
         f"""
@@ -168,10 +241,9 @@ def sticky_title(title_text):
         unsafe_allow_html=True
     )
 
-
-
+# -------------------------
 # Login / Signup UI
-
+# -------------------------
 def page_login():
     sticky_title("Login / Signup")
 
@@ -181,23 +253,26 @@ def page_login():
         password = st.text_input("Password", type="password", key="login_password")
         if st.button("Login", key="login_btn"):
             res = login(email, password)
-            if res.status_code == 200:
+            if res is None:
+                st.error("Login request failed (network error).")
+            elif res.status_code == 200:
                 data = res.json()
-                st.session_state.token = data["access_token"]
+                st.session_state.token = data.get("access_token")
+                st.session_state.refresh_token = data.get("refresh_token")  # store refresh token if returned
                 st.session_state.mode = data.get("mode", "")
                 st.session_state.username = data.get("username", "")
                 st.session_state.email = data.get("email", "")
                 st.success("Login successful!")
-                # move to documents after login
                 st.session_state.page = "documents"
-
-                # Force rerun after login
                 if hasattr(st, "rerun"):
                     st.rerun()
                 else:
                     st.experimental_rerun()
             else:
-                st.error(res.json().get("detail", "Login failed"))
+                try:
+                    st.error(res.json().get("detail", "Login failed"))
+                except Exception:
+                    st.error("Login failed")
 
     with tab2:
         username = st.text_input("Username", key="signup_username")
@@ -206,76 +281,89 @@ def page_login():
         role = st.selectbox("Role", ["Student", "doctor", "lawyer", "business_man", "financer", "admin"], key="signup_role")
         if st.button("Create Account", key="signup_btn"):
             res = signup(username, email2, password2, role)
-            if res.status_code in (200, 201):
+            if res is None:
+                st.error("Signup request failed (network error).")
+            elif res.status_code in (200, 201):
                 st.success("Signup successful — now login.")
             else:
-                st.error(res.json().get("detail", "Signup failed"))
+                try:
+                    st.error(res.json().get("detail", "Signup failed"))
+                except Exception:
+                    st.error("Signup failed")
 
-
+# -------------------------
 # Documents page (upload/list/delete)
-
+# -------------------------
 def page_documents():
     sticky_title("📁 Documents")
-
 
     # upload
     allowed_formats = ["pdf", "txt", "rtf", "png", "jpg", "jpeg", "mp3", "wav", "m4a", "mp4", "aac"]
     file = st.file_uploader("Upload a file", type=allowed_formats)
     if file is not None:
         if st.button("Upload"):
-            res = upload_file(st.session_state.token, file)
-            if res.status_code == 200:
+            res = call_with_refresh(upload_file, file)
+            if res and res.status_code == 200:
                 st.success("Uploaded & indexed!")
             else:
-                st.error(f"Upload failed: {res.text}")
+                st.error(f"Upload failed: {getattr(res, 'text', res)}")
 
     # list documents
     st.subheader("Your Files")
-    res = list_documents(st.session_state.token)
-    if res.status_code == 200:
+    res = call_with_refresh(list_documents)
+    if res and res.status_code == 200:
         docs = res.json().get("documents", [])
         for doc in docs:
             col1, col2 = st.columns([8, 2])
             col1.write(f"📄 {doc.get('filename')}")
             if col2.button("Delete", key=f"del_{doc.get('id')}"):
-                r = delete_doc(st.session_state.token, doc.get("id"))
-                if r.status_code == 200:
+                r = call_with_refresh(delete_doc, doc.get("id"))
+                if r and r.status_code == 200:
                     st.success("Deleted")
                 else:
                     st.error("Delete failed")
+                # refresh UI
                 st.experimental_rerun() if hasattr(st, "experimental_rerun") else st.experimental_set_query_params(reload=int(time.time()))
     else:
-        st.error("Failed to load documents")
+        # if token expired or unauthorized, prompt login
+        if res and getattr(res, "status_code", None) == 401:
+            st.warning("Session expired — please login again.")
+            page_login()
+        else:
+            st.error("Failed to load documents")
 
-# Chat page
 # -------------------------
-# Chat Page (Optimized)
+# Chat page
 # -------------------------
 def page_chat():
     sticky_title("💬 Chat")
 
     # If no chat selected, create one
     if "current_chat" not in st.session_state or st.session_state.current_chat is None:
-        resp = create_chat_session(st.session_state.token)
-        st.session_state.current_chat = resp.json()["session_id"]
+        resp = call_with_refresh(create_chat_session)
+        if resp and resp.status_code == 200:
+            st.session_state.current_chat = resp.json()["session_id"]
+        else:
+            st.warning("Could not create chat session. Please login again.")
+            return
 
-    # Load messages only once per rerun
-    resp = get_chat_messages(st.session_state.token, st.session_state.current_chat)
-
-    if resp.status_code == 200:
+    # Load messages
+    resp = call_with_refresh(get_chat_messages, st.session_state.current_chat)
+    if resp and resp.status_code == 200:
         messages = resp.json()
-        # Store metadata if backend adds it later
         st.session_state.chat = [
-            {
-                "role": m["role"],
-                "content": m["content"],
-                "timestamp": m["timestamp"]
-            }
+            {"role": m["role"], "content": m["content"], "timestamp": m["timestamp"]}
             for m in messages
         ]
+    else:
+        if resp and getattr(resp, "status_code", None) == 401:
+            st.warning("Session expired — please login again.")
+            page_login()
+            return
+        st.error("Failed to load chat messages")
+        return
 
     # ---------------- CHAT UI ----------------
-
     CHAT_CSS = """
     <style>
     .chatbox {
@@ -320,33 +408,23 @@ def page_chat():
     </style>
     """
 
-    # Chat Renderer
     def render_chat():
         html = CHAT_CSS + "<div id='chatbox' class='chatbox'>"
-
         for msg in st.session_state.chat:
             role = msg["role"]
             text = msg["content"]
             ts = msg["timestamp"]
 
-            # Extract metrics inside message
             metric_display = ""
             if "📊 Answer Metrics" in text:
-                # Split main text and metric text
                 parts = text.split("📊")
                 main_txt = parts[0]
                 metric_txt = "📊" + parts[1]
-
                 safe_main = html_lib.escape(main_txt)
-
-                metric_display = f"""
-                    <div class="metric-line">{html_lib.escape(metric_txt)}</div>
-                """
-
+                metric_display = f"<div class='metric-line'>{html_lib.escape(metric_txt)}</div>"
             else:
                 safe_main = html_lib.escape(text)
 
-            # Role formatting
             if role == "assistant":
                 html += f"""
                 <div class="msg-row msg-left">
@@ -366,7 +444,6 @@ def page_chat():
                     </div>
                 </div>
                 """
-
         html += "</div>"
         return html
 
@@ -385,39 +462,31 @@ def page_chat():
         try:
             if len(st.session_state.chat) == 0:
                 title = (msg.strip()[:80]) if msg else "New Chat"
-                update_chat_title(st.session_state.token, st.session_state.current_chat, title)
-        except:
+                call_with_refresh(update_chat_title, st.session_state.current_chat, title)
+        except Exception:
             pass
 
         # Save user message
-        save_chat_message(st.session_state.token, st.session_state.current_chat, "user", msg)
+        call_with_refresh(save_chat_message, st.session_state.current_chat, "user", msg)
 
-        # ------------- AI REPLY ----------------
+        # Get AI reply
         with st.spinner("Thinking…"):
-            response = rag_answer(st.session_state.token, msg)
-            data = response.json()
+            response = call_with_refresh(rag_answer, msg)
+            data = response.json() if (response and hasattr(response, "json")) else {}
 
         answer = data.get("answer", "No response")
         metrics = data.get("metrics", {})
         avg_sim = metrics.get("avg_similarity")
         hall_rate = metrics.get("hallucination_rate")
 
-        # Add metrics under message
         metrics_text = ""
         if avg_sim is not None and hall_rate is not None:
-            metrics_text = (
-                f"\n\n📊 Answer Metrics-: Avg Similarity: {avg_sim:.3f},Hallucination Rate: {hall_rate:.3f}"
-            )
+            metrics_text = f"\n\n📊 Answer Metrics-: Avg Similarity: {avg_sim:.3f},Hallucination Rate: {hall_rate:.3f}"
 
         final_answer = answer + metrics_text
 
         # Save AI message
-        save_chat_message(
-            st.session_state.token,
-            st.session_state.current_chat,
-            "assistant",
-            final_answer
-        )
+        call_with_refresh(save_chat_message, st.session_state.current_chat, "assistant", final_answer)
 
         st.rerun()
 
@@ -426,14 +495,14 @@ def page_chat():
 # -------------------------
 def page_ocr():
     sticky_title("OCR / Extract Text")
-    res = list_documents(st.session_state.token)
-    docs = res.json().get("documents", []) if res.status_code==200 else []
+    res = call_with_refresh(list_documents)
+    docs = res.json().get("documents", []) if (res and res.status_code == 200) else []
     doc_map = {d["filename"]: d["id"] for d in docs}
     choice = st.selectbox("Select file", list(doc_map.keys()))
     if st.button("Extract"):
         file_id = doc_map[choice]
-        r = extract_text(st.session_state.token, file_id)
-        if r.status_code == 200:
+        r = call_with_refresh(extract_text, file_id)
+        if r and r.status_code == 200:
             st.text_area("Extracted Text", r.json().get("extracted_text",""), height=300)
         else:
             st.error("Extraction failed")
@@ -443,8 +512,8 @@ def page_summarize():
     text = st.text_area("Text to summarize", height=200)
     method = st.selectbox("Method", ["abstractive","extractive","bullet"])
     if st.button("Summarize"):
-        r = summarize(st.session_state.token, text, method)
-        if r.status_code==200:
+        r = call_with_refresh(summarize, text, method)
+        if r and r.status_code==200:
             st.text_area("Summary", r.json().get("summary",""), height=200)
         else:
             st.error("Error summarizing")
@@ -454,8 +523,8 @@ def page_format():
     text = st.text_area("Text to format", height=200)
     fmt = st.selectbox("Format", ["markdown","json","table"])
     if st.button("Format"):
-        r = format_text(st.session_state.token, text, fmt)
-        if r.status_code==200:
+        r = call_with_refresh(format_text, text, fmt)
+        if r and r.status_code==200:
             st.text_area("Formatted", r.json(), height=200)
         else:
             st.error("Formatting failed")
@@ -465,8 +534,8 @@ def page_search():
     q = st.text_input("Query")
     top_k = st.text_input("Top K", "3")
     if st.button("Search"):
-        r = search_similarity(st.session_state.token, q, top_k)
-        if r.status_code==200:
+        r = call_with_refresh(search_similarity, q, top_k)
+        if r and r.status_code==200:
             st.json(r.json())
         else:
             st.error("Search failed")
@@ -476,15 +545,12 @@ def page_search():
 # -------------------------
 def do_logout():
     st.session_state.token = None
+    st.session_state.refresh_token = None
     st.session_state.mode = None
     st.session_state.chat = []
     st.session_state.page = "login"
-
-    # NEW SYNTAX (Streamlit 1.30+)
     st.query_params = {"logout": int(time.time())}
-
     st.rerun()
-
 
 # -------------------------
 # Main render logic

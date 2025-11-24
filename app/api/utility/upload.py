@@ -19,8 +19,8 @@ async def upload_file(
     current_user: User = Depends(user_or_admin)
 ):
     # Check duplicate
-    if db.query(Document).filter(Document.filename == file.filename).first():
-        raise HTTPException(409, "File already exists")
+    if db.query(Document).filter(Document.filename == file.filename, Document.owner == current_user.username).first():
+        raise HTTPException(409, "File already exists for this user")
 
     # Save uploaded file
     file_id, path, media_type = save_upload(file)

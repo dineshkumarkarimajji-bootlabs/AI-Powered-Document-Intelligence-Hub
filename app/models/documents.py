@@ -6,7 +6,7 @@ class Document(Base):
     __tablename__ = "documents"
 
     id = Column(String, primary_key=True)
-    filename = Column(String, unique=True)
+    filename = Column(String)
     path = Column(String)
     media_type = Column(String)
     owner = Column(String, nullable=True)

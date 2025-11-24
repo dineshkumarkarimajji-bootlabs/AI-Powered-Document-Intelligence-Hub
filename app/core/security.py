@@ -10,8 +10,10 @@ from app.models.db import get_db
 
 # -------------------- JWT CONFIG --------------------
 SECRET_KEY = "45a70544539124673fc8daf946a53a71b72daed29d8e5cf451bd669a40d3b390"
+REFRESH_SECRET_KEY="b1c3e8f4d5e6a7b8901234567890abcdef1234567890abcdef1234567890abcd"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
+REFRESH_TOKEN_EXPIRE_DAYS = 14
 
 # -------------------- Password Context --------------------
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
@@ -37,6 +39,12 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
+def create_refresh_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, REFRESH_SECRET_KEY, algorithm=ALGORITHM)
+
 # -------------------- OAUTH2 SCHEME --------------------
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
@@ -52,8 +60,6 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         email: str = payload.get("sub")
         if email is None:
             raise credentials_exception
-        role: str = payload.get("role", "USER")
-        user_id: int = payload.get("id")
     except JWTError:
         raise credentials_exception
 

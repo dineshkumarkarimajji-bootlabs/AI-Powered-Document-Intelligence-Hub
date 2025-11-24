@@ -21,4 +21,5 @@ class User(Base):
     role = Column(String(50), default=Roles.Student.value)
     created_at = Column(DateTime, default=datetime.utcnow)
     is_active = Column(Boolean, default=True)
+    refresh_token = Column(String, nullable=True) 
 

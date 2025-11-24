@@ -84,3 +84,13 @@ def delete_chat_session(token, session_id):
         headers={"Authorization": f"Bearer {token}"}
     )
 
+
+def refresh_access(refresh_token: str):
+    # backend expects form field named refresh_token
+    url = f"{BASE_URL}/auth/refresh"
+    try:
+        resp = requests.post(url, data={"refresh_token": refresh_token}, timeout=10)
+        return resp
+    except Exception as e:
+        # make sure caller can handle failures
+        return None

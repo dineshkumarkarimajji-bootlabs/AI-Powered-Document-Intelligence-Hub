@@ -5,7 +5,7 @@ import sys
 from sqlalchemy import engine_from_config, pool
 from alembic import context
 
-# Make sure Alembic can import your app package
+# Ensure app is importable
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 config = context.config
@@ -13,9 +13,16 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# ----- IMPORT YOUR SQLAlchemy Base HERE -----
-from app.models.db import Base     # adjust if needed
+# ----- IMPORT YOUR MODELS HERE -----
+# These MUST match EXACT model class names
+from app.models.db import Base
+from app.models.users import User
+from app.models.documents import Document
+from app.models.user_chart import ChatSession, ChatMessage   # <---- FIXED
+# ------------------------------------
+
 target_metadata = Base.metadata
+
 # --------------------------------------------
 
 
