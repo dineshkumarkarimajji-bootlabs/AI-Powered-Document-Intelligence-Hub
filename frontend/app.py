@@ -350,8 +350,6 @@ def page_chat():
                 # use the first 80 chars of the message as the title (trim whitespace)
                 title = (msg.strip()[:80]) if msg else "New Chat"
                 update_resp = update_chat_title(st.session_state.token, st.session_state.current_chat, title)
-                # optional: log backend response
-                print("DEBUG UPDATE TITLE:", update_resp.status_code, update_resp.text)
         except Exception as e:
             print("DEBUG: failed to update chat title:", e)
 
