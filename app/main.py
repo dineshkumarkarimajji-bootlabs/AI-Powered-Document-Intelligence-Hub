@@ -1,7 +1,18 @@
 from fastapi import FastAPI
 from app.api.routes import router
+from app.models.db import Base, engine
+
+# 🚀 Import ALL MODELS so SQLAlchemy sees them
+from app.models.users import User
+from app.models.documents import Document
+from app.models.user_chart import  ChatMessage  # <-- IMPORTANT
+from app.models.user_chart import  ChatSession  # <-- IMPORTANT
 
 app = FastAPI(title="Document AI Hub", version="1.0.0")
 
-app.include_router(router)
+def init_db():
+    Base.metadata.create_all(bind=engine)
 
+init_db()
+
+app.include_router(router)

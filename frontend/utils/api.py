@@ -45,3 +45,42 @@ def format_text(token, text, fmt):
     headers = {"Authorization": f"Bearer {token}"}
     data = {"text": text, "format": fmt}
     return requests.post(f"{BASE_URL}/format/text", headers=headers, data=data)
+
+
+def create_chat_session(token):
+    return requests.post(
+        f"{BASE_URL}/chart/session/create",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+def list_chat_sessions(token):
+    return requests.get(
+        f"{BASE_URL}/chart/chat/sessions",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+def get_chat_messages(token, session_id):
+    return requests.get(
+        f"{BASE_URL}/chart/chat/session/{session_id}/messages",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+def save_chat_message(token, session_id, role, content):
+    return requests.post(
+        f"{BASE_URL}/chart/chat/session/{session_id}/message",
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        json={"role": role, "content": content}   # MUST SEND JSON
+    )
+
+def update_chat_title(token, session_id, title):
+    return requests.put(
+        f"{BASE_URL}/chart/chat/session/{session_id}/title",
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        json={"title": title}
+    )
+def delete_chat_session(token, session_id):
+    return requests.delete(
+        f"{BASE_URL}/chart/chat/session/{session_id}",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+

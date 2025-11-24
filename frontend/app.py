@@ -2,8 +2,12 @@ import time
 import html as html_lib
 import streamlit as st
 import streamlit.components.v1 as components
-from utils.api import login, signup, upload_file, list_documents, delete_doc, rag_answer, extract_text, search_similarity, summarize, format_text
-
+from utils.api import (
+    login, signup, upload_file, list_documents, delete_doc,
+    rag_answer, extract_text, search_similarity, summarize, format_text,
+    create_chat_session, list_chat_sessions, get_chat_messages, save_chat_message,
+    update_chat_title, delete_chat_session
+)
 st.set_page_config(page_title="AI-Powered Document Intelligence Hub", layout="wide")
 
 # -------------------------
@@ -49,17 +53,15 @@ def show_mode_banner():
 def sidebar_nav():
     st.sidebar.title("Docs AI")
 
+
     # ---- Updated CSS (Streamlit 1.30+ compatible) ----
     st.sidebar.markdown("""
         <style>
-            /* Sidebar container spacing */
             section[data-testid="stSidebar"] {
                 padding-top: 5px !important;
                 margin-top: 0px !important;
                 margin-bottom: 0px !important;
             }
-
-            /* Make all sidebar buttons same width & height */
             section[data-testid="stSidebar"] button {
                 width: 200px !important;
                 height: 40px !important;
@@ -69,14 +71,11 @@ def sidebar_nav():
                 justify-content: start;
                 align-items: center;
             }
-
-            /* Optional: Highlight selected page */
             .selected-btn {
                 background-color: #2d5dff !important;
                 color: white !important;
                 border: 1px solid #2d5dff !important;
             }
-
         </style>
     """, unsafe_allow_html=True)
 
@@ -90,26 +89,62 @@ def sidebar_nav():
         "Search": "search",
     }
 
-    # ---- Render Navigation Buttons ----
     for label, value in pages.items():
         if st.sidebar.button(label, key=f"nav_{value}"):
             st.session_state.page = value
             st.rerun()
+    
+    # ---- Chat History Section ----
+    if st.session_state.token:
+        st.sidebar.subheader("💬 Chat History")
 
-    # ---- Space before bottom logout ----
-    st.sidebar.markdown("<div style='height:160px'></div>", unsafe_allow_html=True)
+        # New chat button
+        if st.sidebar.button("➕ New Chat", key="new_chat_btn"):
+            resp = create_chat_session(st.session_state.token)
+            if resp.status_code == 200:
+                st.session_state.current_chat = resp.json()["session_id"]
+                st.session_state.page = "chat"
+                st.rerun()
+            else:
+                print("DEBUG CREATE SESSION:", resp.status_code, resp.text)   # <--- ADD THIS
 
-    # ---- Logout Section ----
+
+        # Load sessions
+        resp = list_chat_sessions(st.session_state.token)
+        if resp.status_code == 200:
+            sessions = resp.json()
+
+            # limit to latest 4 chats
+            sessions = sessions[:4]
+
+            for s in sessions:
+                col1, col2 = st.sidebar.columns([4, 1])
+
+                # Select chat
+                if col1.button(f"💭 {s['title']}", key=f"chat_{s['id']}"):
+                    st.session_state.current_chat = s["id"]
+                    st.session_state.page = "chat"
+                    st.rerun()
+
+                # Delete button
+                if col2.button("🗑️", key=f"del_chat_{s['id']}"):
+                    delete_chat_session(st.session_state.token, s["id"])
+
+                    # If deleting the currently open chat → reset
+                    if "current_chat" in st.session_state and st.session_state.current_chat == s["id"]:
+                        st.session_state.current_chat = None
+
+                    st.rerun()
+
+
+
+    st.sidebar.markdown("<div style='height:130px'></div>", unsafe_allow_html=True)
+
     with st.sidebar.container():
         show_mode_banner()
-        st.markdown(
-            '<div style="position: absolute; bottom: 10px; width: 90%;">',
-            unsafe_allow_html=True
-        )
         if st.sidebar.button("Logout", key="nav_logout_btn"):
             do_logout()
-        st.markdown('</div>', unsafe_allow_html=True)
-
+# -------------------------
     
 
 def sticky_title(title_text):
@@ -215,10 +250,19 @@ def page_documents():
 def page_chat():
     sticky_title("💬 Chat")
 
-    # Init chat storage
-    if "chat" not in st.session_state:
-        st.session_state.chat = []     # list of (role, msg, ts)
-        
+    # If no chat selected, create one
+    if "current_chat" not in st.session_state or st.session_state.current_chat is None:
+        resp = create_chat_session(st.session_state.token)
+        st.session_state.current_chat = resp.json()["session_id"]
+
+    # Load messages from backend
+    resp = get_chat_messages(st.session_state.token, st.session_state.current_chat)
+
+
+    if resp.status_code == 200:
+        messages = resp.json()
+        st.session_state.chat = [(m["role"], m["content"], m["timestamp"]) for m in messages]
+
 
     # --------------------- CHAT HISTORY (TOP) ---------------------
     def render_chat():
@@ -286,65 +330,43 @@ def page_chat():
                 </div>
                 """
 
-        html += """
-        </div>
-        <script>
-            var box = document.getElementById("chatbox");
-            if (box) { box.scrollTop = box.scrollHeight; }
-        </script>
-        """
+        html += "</div>"
         return html
 
     components.html(render_chat(), height=580, scrolling=False)
 
-    # --------------------- USER INPUT (BOTTOM) using a form ---------------------
+    # --------------------- USER INPUT ---------------------
     with st.form(key="chat_form", clear_on_submit=True):
         cols = st.columns([9, 1])
-        with cols[0]:
-            user_query = st.text_input("Message", placeholder="Type your message…", key="msg_box")
-        with cols[1]:
-            send = st.form_submit_button("Send")
+        user_query = cols[0].text_input("Message", placeholder="Type your message…", key="msg_box")
+        send = cols[1].form_submit_button("Send")
 
-    # --------------------- WHEN FORM IS SUBMITTED ---------------------
     if send and user_query and user_query.strip():
         msg = user_query.strip()
 
-        # store user message
-        st.session_state.chat.append(("user", msg, time.strftime("%H:%M:%S")))
+        # Update chat title if this is the first message in the session
+        try:
+            if len(st.session_state.chat) == 0:
+                # use the first 80 chars of the message as the title (trim whitespace)
+                title = (msg.strip()[:80]) if msg else "New Chat"
+                update_resp = update_chat_title(st.session_state.token, st.session_state.current_chat, title)
+                # optional: log backend response
+                print("DEBUG UPDATE TITLE:", update_resp.status_code, update_resp.text)
+        except Exception as e:
+            print("DEBUG: failed to update chat title:", e)
 
-        # call backend
+        # Save user message
+        save_chat_message(st.session_state.token, st.session_state.current_chat, "user", msg)
+
+        # Get AI reply
         with st.spinner("Thinking…"):
-            try:
-                r = rag_answer(st.session_state.token, msg)
-                answer = r.json().get("answer", "No response")
+            response = rag_answer(st.session_state.token, msg)
+            answer = response.json().get("answer", "No response")
 
-                # NEW: extract metrics
-                metrics = r.json().get("metrics", {})
-                avg_sim = metrics.get("avg_similarity")
-                halluc_rate = metrics.get("hallucination_rate")
+        # Save AI message
+        save_chat_message(st.session_state.token, st.session_state.current_chat, "assistant", answer)
 
-                # Prepare metrics bubble text
-                metrics_text = f"Metrics:\n Avg Similarity: {avg_sim:.3f}, Hallucination Rate: {halluc_rate:.3f}"
-
-                answer += f"\n\n{metrics_text}"
-            except Exception as e:
-                answer = f"[Error] {e}"
-                metrics_text = None
-
-        # # Store AI text message
-        st.session_state.chat.append(("assistant", answer, time.strftime("%H:%M:%S")))
-
-        # # Store metrics as separate bubble (optional but recommended)
-        # if metrics_text:
-        #     st.session_state.chat.append(("assistant", metrics_text, time.strftime("%H:%M:%S")))
-
-        # else:
-        #     st.session_state.chat.append(("assistant", answer, time.strftime("%H:%M:%S")))
-
-        # rerun to render updated chat (input cleared by form automatically)
         st.rerun()
-
-
 
 # -------------------------
 # OCR / Summarize / Format / Search pages (simple)

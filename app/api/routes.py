@@ -1,6 +1,5 @@
 from fastapi import APIRouter
 
-from app.models.db import engine, Base
 
 # --- Import all API modules ---
 from app.api.utility.auth import router as auth_router
@@ -11,6 +10,7 @@ from app.api.utility.ocr import router as ocr_router
 from app.api.utility.summarize import router as summarize_router    
 from app.api.utility.format import router as format_router
 from app.api.utility.user_docs import router as user_docs_router
+from app.api.utility.chart_history import router as chart_history_router
 
 
 
@@ -26,6 +26,6 @@ router.include_router(ocr_router)
 router.include_router(summarize_router)
 router.include_router(format_router)
 router.include_router(user_docs_router)
+router.include_router(chart_history_router)
 
-# Create tables
-Base.metadata.create_all(bind=engine)
+
