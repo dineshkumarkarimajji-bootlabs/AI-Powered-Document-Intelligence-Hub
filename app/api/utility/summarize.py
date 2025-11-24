@@ -7,10 +7,10 @@ from app.services.summarization import summarizer
 router = APIRouter(prefix="/summarize", tags=["Summarization"])
 
 @router.post("/text")
-def summarize_text(
+async def summarize_text(
     text: str = Form(...),
     method: SummaryMethod = Form(SummaryMethod.abstractive),
     current_user: User = Depends(user_or_admin)
 ):
-    result = summarizer.summarize(text, method.value)
+    result =summarizer.summarize(text, method.value)
     return {"summary": result}

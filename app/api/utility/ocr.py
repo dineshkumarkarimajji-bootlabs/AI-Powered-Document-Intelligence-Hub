@@ -12,7 +12,7 @@ router = APIRouter(prefix="/text", tags=["OCR & AUDIO"])
 
 
 @router.post("/extract")
-def ocr_extract(file_id: str, db: Session = Depends(get_db),current_user: User = Depends(user_or_admin)):
+async def ocr_extract(file_id: str, db: Session = Depends(get_db),current_user: User = Depends(user_or_admin)):
     """
     Extract text from a document using OCR or PDF text extraction.
     """

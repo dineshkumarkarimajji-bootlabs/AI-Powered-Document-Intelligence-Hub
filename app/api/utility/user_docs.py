@@ -10,18 +10,18 @@ from app.services.vector_service import VectorStoreService
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
 @router.get("/")
-def get_user_documents(
+async def get_user_documents(
     db: Session = Depends(get_db),
     current_user: User = Depends(user_or_admin)
 ):
-    docs = db.query(Document).filter(Document.owner == current_user.username).all()
+    docs =db.query(Document).filter(Document.owner == current_user.username).all()
     return {"documents": docs}
 
 
 
 
 @router.delete("/{doc_id}")
-def delete_document(
+async def delete_document(
     doc_id: str,
     db = Depends(get_db),
     current_user: User = Depends(user_or_admin),

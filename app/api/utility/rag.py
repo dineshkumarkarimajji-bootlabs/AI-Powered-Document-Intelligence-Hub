@@ -10,7 +10,7 @@ import time
 router = APIRouter(prefix="/rag", tags=["RAG"])
 
 @router.post("/answer")
-def answer(query: str=Query(...), top_k: int = 7, use_llm: bool = True, current_user: User = Depends(user_or_admin)):
+async def answer(query: str=Query(...), top_k: int = 7, use_llm: bool = True, current_user: User = Depends(user_or_admin)):
     start_time = time.time()
     retriever = Retriever()
     result = retriever.query(query, top_k=top_k, user=current_user.username, user_role=current_user.role)
@@ -18,5 +18,5 @@ def answer(query: str=Query(...), top_k: int = 7, use_llm: bool = True, current_
     elapsed = time.time() - start_time
     if not use_llm:
         answer = result[0]["text"] if result else "No relevant documents found."
-    return {"query": query, "results": result, "answer": answer, "metrics": retriever.evaluate(query, result), "query_time_sec": round(elapsed, 2)}
+    return {"query": query, "results": result, "answer": answer, "metrics":retriever.evaluate(query, result), "query_time_sec": round(elapsed, 2)}
 

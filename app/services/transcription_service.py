@@ -3,7 +3,7 @@ import whisper
 
 
 class TranscriptionService:
-    def __init__(self, model_name: str = "small"):
+    def __init__(self, model_name: str = "medium"):
         try:
             self.model = whisper.load_model(model_name)
         except Exception as e:

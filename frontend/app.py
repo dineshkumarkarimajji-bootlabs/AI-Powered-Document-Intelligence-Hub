@@ -121,7 +121,7 @@ def sidebar_nav():
                 col1, col2 = st.sidebar.columns([4, 1])
 
                 # Select chat
-                if col1.button(f"💭 {s['title']}", key=f"chat_{s['id']}"):
+                if col1.button(f" {s['title']}", key=f"chat_{s['id']}"):
                     st.session_state.current_chat = s["id"]
                     st.session_state.page = "chat"
                     st.rerun()
@@ -169,9 +169,9 @@ def sticky_title(title_text):
     )
 
 
-# -------------------------
+
 # Login / Signup UI
-# -------------------------
+
 def page_login():
     sticky_title("Login / Signup")
 
@@ -211,9 +211,9 @@ def page_login():
             else:
                 st.error(res.json().get("detail", "Signup failed"))
 
-# -------------------------
+
 # Documents page (upload/list/delete)
-# -------------------------
+
 def page_documents():
     sticky_title("📁 Documents")
 
@@ -247,6 +247,10 @@ def page_documents():
     else:
         st.error("Failed to load documents")
 
+# Chat page
+# -------------------------
+# Chat Page (Optimized)
+# -------------------------
 def page_chat():
     sticky_title("💬 Chat")
 
@@ -255,68 +259,101 @@ def page_chat():
         resp = create_chat_session(st.session_state.token)
         st.session_state.current_chat = resp.json()["session_id"]
 
-    # Load messages from backend
+    # Load messages only once per rerun
     resp = get_chat_messages(st.session_state.token, st.session_state.current_chat)
-
 
     if resp.status_code == 200:
         messages = resp.json()
-        st.session_state.chat = [(m["role"], m["content"], m["timestamp"]) for m in messages]
+        # Store metadata if backend adds it later
+        st.session_state.chat = [
+            {
+                "role": m["role"],
+                "content": m["content"],
+                "timestamp": m["timestamp"]
+            }
+            for m in messages
+        ]
 
+    # ---------------- CHAT UI ----------------
 
-    # --------------------- CHAT HISTORY (TOP) ---------------------
+    CHAT_CSS = """
+    <style>
+    .chatbox {
+        height: 540px;
+        overflow-y: auto;
+        padding: 15px;
+        background: black;
+        border-radius: 10px;
+        border: 1px solid #222;
+    }
+    .msg-row { display: flex; margin: 8px 0; width: 100%; }
+    .msg-left  { justify-content: flex-start; }
+    .msg-right { justify-content: flex-end; }
+    .bubble-left {
+        background: #f1f1f1;
+        color: #111;
+        padding: 12px;
+        max-width: 75%;
+        border-radius: 12px;
+        border-bottom-left-radius: 4px;
+        white-space: pre-wrap;
+    }
+    .bubble-right {
+        background: #0b7bdc;
+        color: white;
+        padding: 12px;
+        max-width: 75%;
+        border-radius: 12px;
+        border-bottom-right-radius: 4px;
+        white-space: pre-wrap;
+    }
+    .meta {
+        font-size: 11px;
+        color: #9aa0a6;
+        margin-bottom: 3px;
+    }
+    .metric-line {
+        font-size: 11px;
+        color: #00FFAA;
+        margin-top: 3px;
+    }
+    </style>
+    """
+
+    # Chat Renderer
     def render_chat():
-        css = """
-        <style>
-        .chatbox {
-            height: 540px;
-            overflow-y: auto;
-            padding: 15px;
-            background: black;
-            border-radius: 10px;
-            border: 1px solid #222;
-        }
-        .msg-row { display: flex; margin: 8px 0; width: 100%; }
-        .msg-left  { justify-content: flex-start; }
-        .msg-right { justify-content: flex-end; }
+        html = CHAT_CSS + "<div id='chatbox' class='chatbox'>"
 
-        .bubble-left {
-            background: #f1f1f1;
-            color: #111;
-            padding: 12px;
-            max-width: 75%;
-            border-radius: 12px;
-            border-bottom-left-radius: 4px;
-            white-space: pre-wrap;
-            width: 100%;
-        }
-        .bubble-right {
-            background: #0b7bdc;
-            color: white;
-            padding: 12px;
-            max-width: 75%;
-            border-radius: 12px;
-            border-bottom-right-radius: 4px;
-            white-space: pre-wrap;
-        }
-        .meta {
-            font-size: 11px;
-            color: #9aa0a6;
-            margin-bottom: 3px;
-        }
-        </style>
-        """
+        for msg in st.session_state.chat:
+            role = msg["role"]
+            text = msg["content"]
+            ts = msg["timestamp"]
 
-        html = css + "<div id='chatbox' class='chatbox'>"
+            # Extract metrics inside message
+            metric_display = ""
+            if "📊 Answer Metrics" in text:
+                # Split main text and metric text
+                parts = text.split("📊")
+                main_txt = parts[0]
+                metric_txt = "📊" + parts[1]
 
-        for role, text, ts in st.session_state.chat:
-            safe = html_lib.escape(text)
+                safe_main = html_lib.escape(main_txt)
+
+                metric_display = f"""
+                    <div class="metric-line">{html_lib.escape(metric_txt)}</div>
+                """
+
+            else:
+                safe_main = html_lib.escape(text)
+
+            # Role formatting
             if role == "assistant":
                 html += f"""
                 <div class="msg-row msg-left">
                     <div>
                         <div class="meta">{ts} • AI</div>
-                        <div class="bubble-left">{safe}</div>
+                        <div class="bubble-left">{safe_main}</div>
+                        {metric_display}
                     </div>
                 </div>
                 """
@@ -325,7 +362,7 @@ def page_chat():
                 <div class="msg-row msg-right">
                     <div>
                         <div class="meta" style="text-align:right;">{ts} • You</div>
-                        <div class="bubble-right">{safe}</div>
+                        <div class="bubble-right">{safe_main}</div>
                     </div>
                 </div>
                 """
@@ -335,7 +372,7 @@ def page_chat():
 
     components.html(render_chat(), height=580, scrolling=False)
 
-    # --------------------- USER INPUT ---------------------
+    # ---------------- INPUT BOX ----------------
     with st.form(key="chat_form", clear_on_submit=True):
         cols = st.columns([9, 1])
         user_query = cols[0].text_input("Message", placeholder="Type your message…", key="msg_box")
@@ -344,25 +381,43 @@ def page_chat():
     if send and user_query and user_query.strip():
         msg = user_query.strip()
 
-        # Update chat title if this is the first message in the session
+        # Update chat title for first message
         try:
             if len(st.session_state.chat) == 0:
-                # use the first 80 chars of the message as the title (trim whitespace)
                 title = (msg.strip()[:80]) if msg else "New Chat"
-                update_resp = update_chat_title(st.session_state.token, st.session_state.current_chat, title)
-        except Exception as e:
-            print("DEBUG: failed to update chat title:", e)
+                update_chat_title(st.session_state.token, st.session_state.current_chat, title)
+        except:
+            pass
 
         # Save user message
         save_chat_message(st.session_state.token, st.session_state.current_chat, "user", msg)
 
-        # Get AI reply
+        # ------------- AI REPLY ----------------
         with st.spinner("Thinking…"):
             response = rag_answer(st.session_state.token, msg)
-            answer = response.json().get("answer", "No response")
+            data = response.json()
+
+        answer = data.get("answer", "No response")
+        metrics = data.get("metrics", {})
+        avg_sim = metrics.get("avg_similarity")
+        hall_rate = metrics.get("hallucination_rate")
+
+        # Add metrics under message
+        metrics_text = ""
+        if avg_sim is not None and hall_rate is not None:
+            metrics_text = (
+                f"\n\n📊 Answer Metrics-: Avg Similarity: {avg_sim:.3f},Hallucination Rate: {hall_rate:.3f}"
+            )
+
+        final_answer = answer + metrics_text
 
         # Save AI message
-        save_chat_message(st.session_state.token, st.session_state.current_chat, "assistant", answer)
+        save_chat_message(
+            st.session_state.token,
+            st.session_state.current_chat,
+            "assistant",
+            final_answer
+        )
 
         st.rerun()
 

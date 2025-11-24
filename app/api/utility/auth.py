@@ -14,7 +14,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 # --- SIGNUP ---
 @router.post("/signup")
-def signup(
+async def signup(
     username: str = Form(...),
     email: str = Form(...),
     password: str = Form(...),
@@ -43,7 +43,7 @@ def signup(
 # --- LOGIN ---
 
 @router.post("/login")
-def login(
+async def login(
     username: str = Form(...),
     password: str = Form(...),
     db: Session = Depends(get_db)

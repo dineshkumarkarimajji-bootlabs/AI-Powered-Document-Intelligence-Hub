@@ -8,7 +8,7 @@ from app.models.user_chart import ChatMessage, ChatSession
 router = APIRouter(prefix="/chart", tags=["Chart History"])
 
 @router.post("/session/create")
-def create_session(db: Session = Depends(get_db), current_user: User = Depends(user_or_admin)):
+async def create_session(db: Session = Depends(get_db), current_user: User = Depends(user_or_admin)):
     session = ChatSession(user_id=current_user.id, title="New Chat")
     db.add(session)
     db.commit()
@@ -40,7 +40,7 @@ def add_message(
 
 
 @router.get("/chat/sessions")
-def list_sessions(db: Session = Depends(get_db), current_user: User = Depends(user_or_admin)):
+async def list_sessions(db: Session = Depends(get_db), current_user: User = Depends(user_or_admin)):
     sessions = db.query(ChatSession)\
                  .filter(ChatSession.user_id == current_user.id)\
                  .order_by(ChatSession.created_at.desc())\
@@ -49,7 +49,7 @@ def list_sessions(db: Session = Depends(get_db), current_user: User = Depends(us
     return [{"id": s.id, "title": s.title, "created_at": s.created_at} for s in sessions]
 
 @router.get("/chat/session/{session_id}/messages")
-def get_messages(session_id: int,
+async def get_messages(session_id: int,
                  db: Session = Depends(get_db),
                  current_user: User = Depends(user_or_admin)):
 
@@ -71,7 +71,7 @@ class TitleUpdate(BaseModel):
     title: str
 
 @router.put("/chat/session/{session_id}/title")
-def update_chat_title(
+async def update_chat_title(
     session_id: int,
     body: TitleUpdate,
     db: Session = Depends(get_db),
@@ -91,7 +91,7 @@ def update_chat_title(
     return {"status": "updated"}
 
 @router.delete("/chat/session/{session_id}")
-def delete_session(
+async def delete_session(
     session_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(user_or_admin)
