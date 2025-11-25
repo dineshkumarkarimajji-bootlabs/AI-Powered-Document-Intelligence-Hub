@@ -49,38 +49,38 @@ def format_text(token, text, fmt):
 
 def create_chat_session(token):
     return requests.post(
-        f"{BASE_URL}/chart/session/create",
+        f"{BASE_URL}/chat/session/create",
         headers={"Authorization": f"Bearer {token}"}
     )
 
 def list_chat_sessions(token):
     return requests.get(
-        f"{BASE_URL}/chart/chat/sessions",
+        f"{BASE_URL}/chat/chat/sessions",
         headers={"Authorization": f"Bearer {token}"}
     )
 
 def get_chat_messages(token, session_id):
     return requests.get(
-        f"{BASE_URL}/chart/chat/session/{session_id}/messages",
+        f"{BASE_URL}/chat/chat/session/{session_id}/messages",
         headers={"Authorization": f"Bearer {token}"}
     )
 
 def save_chat_message(token, session_id, role, content):
     return requests.post(
-        f"{BASE_URL}/chart/chat/session/{session_id}/message",
+        f"{BASE_URL}/chat/chat/session/{session_id}/message",
         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
         json={"role": role, "content": content}   # MUST SEND JSON
     )
 
 def update_chat_title(token, session_id, title):
     return requests.put(
-        f"{BASE_URL}/chart/chat/session/{session_id}/title",
+        f"{BASE_URL}/chat/chat/session/{session_id}/title",
         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
         json={"title": title}
     )
 def delete_chat_session(token, session_id):
     return requests.delete(
-        f"{BASE_URL}/chart/chat/session/{session_id}",
+        f"{BASE_URL}/chat/chat/session/{session_id}",
         headers={"Authorization": f"Bearer {token}"}
     )
 

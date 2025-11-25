@@ -5,7 +5,7 @@ from app.models.users import User
 from app.core.security import user_or_admin
 from app.models.user_chart import ChatMessage, ChatSession
 
-router = APIRouter(prefix="/chart", tags=["Chart History"])
+router = APIRouter(prefix="/chat", tags=["Chat History"])
 
 @router.post("/session/create")
 async def create_session(db: Session = Depends(get_db), current_user: User = Depends(user_or_admin)):

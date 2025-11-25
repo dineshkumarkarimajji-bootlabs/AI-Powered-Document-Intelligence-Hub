@@ -5,8 +5,8 @@ from app.models.db import Base, engine
 # 🚀 Import ALL MODELS so SQLAlchemy sees them
 from app.models.users import User
 from app.models.documents import Document
-from app.models.user_chart import  ChatMessage  # <-- IMPORTANT
-from app.models.user_chart import  ChatSession  # <-- IMPORTANT
+from app.models.user_chart import  ChatMessage  
+from app.models.user_chart import  ChatSession  
 
 app = FastAPI(title="Document AI Hub", version="1.0.0")
 

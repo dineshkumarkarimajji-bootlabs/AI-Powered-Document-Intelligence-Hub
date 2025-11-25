@@ -2,11 +2,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from app.models import users as model
 from app.models.db import get_db
+import uuid
+import hashlib
 
 # -------------------- JWT CONFIG --------------------
 SECRET_KEY = "45a70544539124673fc8daf946a53a71b72daed29d8e5cf451bd669a40d3b390"
@@ -18,65 +20,82 @@ REFRESH_TOKEN_EXPIRE_DAYS = 14
 # -------------------- Password Context --------------------
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
-# -------------------- Hashing Password --------------------
 def hash_password(password: str) -> str:
-    # Truncate if longer than 72 bytes
     return pwd_context.hash(password)
 
+def verify_password(plain: str, hashed: str) -> bool:
+    return pwd_context.verify(plain, hashed)
 
-# -------------------- Verifying Password --------------------
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    # Verify the provided plain password against the hashed password.
-    return pwd_context.verify(plain_password, hashed_password)
+# -------------------- Refresh Token Helpers --------------------
+def hash_refresh_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
 
-# -------------------- TOKEN CREATION --------------------
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+def verify_refresh_token(token: str, hashed: str) -> bool:
+    return hashlib.sha256(token.encode()).hexdigest() == hashed
+
+# -------------------- ACCESS TOKEN --------------------
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode["exp"] = expire
-    if "sub" not in to_encode and "email" in to_encode:
-        to_encode["sub"] = to_encode["email"]
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+    if "sub" not in to_encode:
+        to_encode["sub"] = data.get("email")
 
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+# -------------------- REFRESH TOKEN --------------------
 def create_refresh_token(data: dict):
     to_encode = data.copy()
+    jti = str(uuid.uuid4())
     expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, REFRESH_SECRET_KEY, algorithm=ALGORITHM)
+    to_encode.update({"exp": expire, "jti": jti})
 
-# -------------------- OAUTH2 SCHEME --------------------
+    token = jwt.encode(to_encode, REFRESH_SECRET_KEY, algorithm=ALGORITHM)
+    return {"token": token, "jti": jti}
+
+# -------------------- OAUTH2 --------------------
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
-# -------------------- CURRENT USER --------------------
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+def get_current_user(
+    request: Request,
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db)
+    ):
+    # Try Authorization header token first
+    if not token:
+        token = request.cookies.get("access_token")
+
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
-            raise credentials_exception
+        email = payload.get("sub")
+        if not email:
+            raise HTTPException(status_code=401, detail="Invalid token")
     except JWTError:
-        raise credentials_exception
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
 
-    user = db.query(model.User).filter(model.User.email == email, model.User.is_active == True).first()
-    if user is None:
-        raise credentials_exception
+    user = db.query(model.User).filter(
+        model.User.email == email,
+        model.User.is_active == True
+    ).first()
+
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
     return user
 
-# -------------------- ROLE-BASED AUTH --------------------
+# -------------------- ROLE CHECKS --------------------
 def admin_required(current_user: model.User = Depends(get_current_user)):
     if current_user.role != model.Roles.ADMIN:
-        raise HTTPException(status_code=403, detail="Admin privileges required")
+        raise HTTPException(403, "Admin privileges required")
     return current_user
 
 def user_or_admin(current_user: model.User = Depends(get_current_user)):
-    if current_user.role not in [model.Roles.Student, model.Roles.Doctor, model.Roles.Business_Man, model.Roles.Financer,model.Roles.Lawyer, model.Roles.ADMIN]:
-        raise HTTPException(status_code=403, detail="User or Admin privileges required")
+    if current_user.role not in [
+        model.Roles.Student, model.Roles.Doctor, model.Roles.Business_Man,
+        model.Roles.Financer, model.Roles.Lawyer, model.Roles.ADMIN
+    ]:
+        raise HTTPException(403, "User or Admin privileges required")
     return current_user
-
-

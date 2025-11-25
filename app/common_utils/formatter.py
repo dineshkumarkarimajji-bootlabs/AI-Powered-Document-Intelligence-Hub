@@ -45,10 +45,32 @@ def format_response(text: str, output: str = "markdown") -> str:
 
 
     elif output == "table":
-        # Fake example conversion: each sentence becomes a row
-        sentences = [s.strip() for s in text.split(".") if s.strip()]
-        rows = [{"index": i + 1, "sentence": s} for i, s in enumerate(sentences)]
+        import re
+
+        # 1. Replace weird PDF line breaks like "e\ng\n" -> "e.g."
+        text_clean = text.replace("e\ng\n", "e.g.")
+
+        # 2. Remove all newlines
+        text_clean = re.sub(r"\s*\n\s*", " ", text_clean)
+
+        # 3. Remove isolated numbering like "1.", "2.", "3." when they appear alone
+        text_clean = re.sub(r"\s*\b\d+\.\b\s*", " ", text_clean)
+
+        # 4. Collapse multiple spaces
+        text_clean = re.sub(r"\s+", " ", text_clean).strip()
+
+        # 5. Split into real sentences using punctuation
+        sentences = re.split(r"(?<=[.!?])\s+(?=[A-Z])", text_clean)
+
+        # 6. Build table rows
+        rows = [
+            {"index": i + 1, "sentence": s.strip()}
+            for i, s in enumerate(sentences)
+            if s.strip()
+        ]
+
         return format_table(rows)
+
 
     else:
         return "Content not supported."

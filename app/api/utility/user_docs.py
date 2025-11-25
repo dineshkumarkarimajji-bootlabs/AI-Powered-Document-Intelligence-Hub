@@ -25,11 +25,9 @@ async def delete_document(
     doc_id: str,
     db = Depends(get_db),
     current_user: User = Depends(user_or_admin),
-    # vector_service: VectorStoreService = Depends()
 ):
     return delete_document_and_vectors(
-        db=db,
-        # vector_service=vector_service,     
+        db=db,    
         doc_id=doc_id,
         username=current_user.username,
     )
