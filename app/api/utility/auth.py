@@ -122,36 +122,30 @@ def login(
     }
 
 
-
 @router.post("/refresh")
 async def refresh_access_token(request: Request, db: Session = Depends(get_db)):
-    """
-    Accepts either form-encoded or JSON with {"refresh_token": "..."}.
-    Returns 400 if no refresh token provided.
-    """
 
     refresh_token = None
 
-    # Try reading form data (multipart or x-www-form-urlencoded)
+    # Try form data
     try:
         form = await request.form()
-        refresh_token = form.get("refresh_token") or form.get("refreshToken")
-    except Exception:
+        refresh_token = form.get("refresh_token")
+    except:
         pass
 
-    # Try reading JSON body
+    # Try JSON
     if not refresh_token:
         try:
             body = await request.json()
-            if isinstance(body, dict):
-                refresh_token = body.get("refresh_token") or body.get("refreshToken")
-        except Exception:
+            refresh_token = body.get("refresh_token") or body.get("refreshToken")
+        except:
             pass
 
     if not refresh_token:
         raise HTTPException(status_code=400, detail="refresh_token missing in request")
 
-    # Verify refresh token
+    # Decode token
     try:
         payload = jwt.decode(refresh_token, REFRESH_SECRET_KEY, algorithms=[ALGORITHM])
         email = payload.get("sub")
@@ -159,7 +153,7 @@ async def refresh_access_token(request: Request, db: Session = Depends(get_db)):
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
-    # Fetch user
+    # Find user
     user = db.query(User).filter(User.email == email).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -168,10 +162,9 @@ async def refresh_access_token(request: Request, db: Session = Depends(get_db)):
     if not verify_refresh_token(refresh_token, user.refresh_token_hash) or jti != user.refresh_jti:
         raise HTTPException(status_code=401, detail="Refresh token expired or revoked")
 
-    # Create new tokens
+    # Token Rotation (IMPORTANT)
     new_access = create_access_token({"sub": email})
     new_refresh_obj = create_refresh_token({"sub": email})
-
     new_refresh = new_refresh_obj["token"]
     new_jti = new_refresh_obj["jti"]
 

@@ -7,31 +7,61 @@ from app.models.users import User
 from app.core.security import user_or_admin
 
 
-
 router = APIRouter(prefix="/text", tags=["OCR & AUDIO"])
 
 
 @router.post("/extract")
-async def ocr_extract(file_id: str, db: Session = Depends(get_db),current_user: User = Depends(user_or_admin)):
+async def ocr_extract(
+    file_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(user_or_admin)
+):
     """
-    Extract text from a document using OCR or PDF text extraction.
+    Extract text from uploaded documents (PDF, DOCX, Image, Audio, etc.)
     """
-    #  Find file in database
-    doc = db.query(Document).filter(Document.id == file_id).first()
+
+
+    doc: Document = db.query(Document).filter(Document.id == file_id).first()
+
     if not doc:
-        raise HTTPException(status_code=404, detail="File not found")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Document with ID {file_id} not found"
+        )
 
-    file_path = doc.path
+    file_path = doc.path  
+    print("DEBUG FILE PATH =>", file_path)  
 
-    #  Extract text using OCR / PDF logic
-    result = extract_text(file_path)
+    import os
+    ext = os.path.splitext(file_path)[1].lower()
+    if not ext:
+        raise HTTPException(
+            status_code=400,
+            detail="File has no extension. Cannot detect extractor."
+        )
 
-    #  Handle failures
+    try:
+        result = extract_text(file_path)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"OCR extraction failed: {str(e)}"
+        )
+
+
+    if result.strip() == "":
+        raise HTTPException(
+            status_code=400,
+            detail="No text extracted from document"
+        )
+
     if result.startswith("[") and result.endswith("]"):
         raise HTTPException(status_code=400, detail=result)
+
 
     return {
         "file_id": file_id,
         "filename": doc.filename,
+        "extension": ext,
         "extracted_text": result
     }

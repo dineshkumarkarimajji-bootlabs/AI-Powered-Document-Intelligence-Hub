@@ -13,13 +13,19 @@ upload_dir = Path(settings.UPLOAD_DIR)
 upload_dir.mkdir(parents=True, exist_ok=True)
 
 def save_upload(file):
-    ext = Path(file.filename).suffix
+    ext = Path(file.filename).suffix.lower()
+
+    if not ext:
+        raise HTTPException(status_code=400, detail="Uploaded file has no extension")
+
+    # Generate unique file id
     file_id = uuid.uuid4().hex
-    filepath = upload_dir / file.filename
 
-    if filepath.exists():
-        filepath = upload_dir / f"{file_id}_{file.filename}"
+    # ALWAYS save file as:  <id><ext>
+    saved_name = f"{file_id}{ext}"
+    filepath = upload_dir / saved_name
 
+    # Write to disk
     with open(filepath, "wb") as f:
         f.write(file.file.read())
 

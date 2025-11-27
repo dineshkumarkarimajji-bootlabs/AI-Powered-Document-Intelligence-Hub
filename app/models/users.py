@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime,Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Boolean
 from datetime import datetime
 from app.models.db import Base
 from enum import Enum as pyEnum
@@ -21,5 +21,5 @@ class User(Base):
     role = Column(String(50), default=Roles.Student.value)
     created_at = Column(DateTime, default=datetime.utcnow)
     is_active = Column(Boolean, default=True)
-    refresh_token = Column(String, nullable=True) 
-
+    refresh_token_hash = Column(String, nullable=True)
+    refresh_jti = Column(String, nullable=True)

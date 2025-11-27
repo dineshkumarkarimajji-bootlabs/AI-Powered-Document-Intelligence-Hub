@@ -21,15 +21,15 @@ class Retriever:
 
         os.makedirs(persist_dir, exist_ok=True)
 
-        # Embedding model
+        
         self.embedding_model = SentenceTransformer(embedding_model_name)
 
-        # Embedding function
+       
         self.embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
             model_name=embedding_model_name
         )
 
-        # Chroma client
+        
         self.client = chromadb.PersistentClient(path=persist_dir)
 
     def get_collection_for_role(self, role: str):
