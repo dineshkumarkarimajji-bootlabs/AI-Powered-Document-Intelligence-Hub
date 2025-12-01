@@ -17,7 +17,5 @@ class TextExtractor(BaseExtractor):
                 encoding = "utf-8"
                 return raw.decode(encoding, errors="ignore")
 
-                return raw.decode(encoding, errors="ignore")
-
             except Exception:
                 return "[Failed to read text file]"

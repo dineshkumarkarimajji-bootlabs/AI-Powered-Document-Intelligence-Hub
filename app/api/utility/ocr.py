@@ -1,3 +1,4 @@
+import os
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 from app.models.db import get_db
@@ -30,9 +31,8 @@ async def ocr_extract(
         )
 
     file_path = doc.path  
-    print("DEBUG FILE PATH =>", file_path)  
 
-    import os
+   
     ext = os.path.splitext(file_path)[1].lower()
     if not ext:
         raise HTTPException(

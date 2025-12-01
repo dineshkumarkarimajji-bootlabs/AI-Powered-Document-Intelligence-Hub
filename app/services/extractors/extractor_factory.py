@@ -11,7 +11,6 @@ class ExtractorFactory:
     def get_extractor(path: str):
         ext = Path(path).suffix.lower()
 
-        # Lazy-load imports ONLY when needed
         if ext == ".pdf":
             
             return PDFExtractor()

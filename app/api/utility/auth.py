@@ -108,10 +108,7 @@ def login(
         path="/"
     )
 
-    # --------------------------
-    # !!! MOST IMPORTANT PART !!!
-    # --------------------------
-    # THIS is what your frontend expects
+
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
@@ -127,14 +124,14 @@ async def refresh_access_token(request: Request, db: Session = Depends(get_db)):
 
     refresh_token = None
 
-    # Try form data
+ 
     try:
         form = await request.form()
         refresh_token = form.get("refresh_token")
     except:
         pass
 
-    # Try JSON
+
     if not refresh_token:
         try:
             body = await request.json()
@@ -145,7 +142,7 @@ async def refresh_access_token(request: Request, db: Session = Depends(get_db)):
     if not refresh_token:
         raise HTTPException(status_code=400, detail="refresh_token missing in request")
 
-    # Decode token
+
     try:
         payload = jwt.decode(refresh_token, REFRESH_SECRET_KEY, algorithms=[ALGORITHM])
         email = payload.get("sub")
@@ -153,7 +150,6 @@ async def refresh_access_token(request: Request, db: Session = Depends(get_db)):
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
-    # Find user
     user = db.query(User).filter(User.email == email).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -162,7 +158,7 @@ async def refresh_access_token(request: Request, db: Session = Depends(get_db)):
     if not verify_refresh_token(refresh_token, user.refresh_token_hash) or jti != user.refresh_jti:
         raise HTTPException(status_code=401, detail="Refresh token expired or revoked")
 
-    # Token Rotation (IMPORTANT)
+    # Token Rotation
     new_access = create_access_token({"sub": email})
     new_refresh_obj = create_refresh_token({"sub": email})
     new_refresh = new_refresh_obj["token"]

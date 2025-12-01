@@ -5,7 +5,7 @@ from app.models.db import get_db
 from app.models.documents import Document
 from app.core.security import user_or_admin
 from app.models.users import User
-from app.services.vector_service import VectorStoreService
+
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 

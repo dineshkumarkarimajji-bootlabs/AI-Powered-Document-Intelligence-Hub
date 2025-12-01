@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from app.api.routes import router
 from app.models.db import Base, engine
 
-# 🚀 Import ALL MODELS so SQLAlchemy sees them
+
 from app.models.users import User
 from app.models.documents import Document
 from app.models.user_chart import  ChatMessage  

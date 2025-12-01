@@ -18,10 +18,8 @@ def save_upload(file):
     if not ext:
         raise HTTPException(status_code=400, detail="Uploaded file has no extension")
 
-    # Generate unique file id
     file_id = uuid.uuid4().hex
 
-    # ALWAYS save file as:  <id><ext>
     saved_name = f"{file_id}{ext}"
     filepath = upload_dir / saved_name
 

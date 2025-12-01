@@ -1,4 +1,3 @@
-from urllib import response
 from langchain_ollama.llms import OllamaLLM
 from app.services.retriever_service import Retriever
 from app.core.config import settings
@@ -87,11 +86,8 @@ def ask_llm(query: str, context: list[str], current_user) -> str:
     - If context is EMPTY → answer normally (no role prompt)
     - If context has text → use role-based prompt
     """
-
-    # Combine only the first few chunks of context
     context_text = "\n\n".join(context[:7]).strip()
 
-    # CASE 1 — NO DOCUMENT CONTEXT → NORMAL CHAT MODE
     if not context_text:
         prompt = f"""
         You are an AI assistant.
@@ -108,7 +104,7 @@ def ask_llm(query: str, context: list[str], current_user) -> str:
         except Exception as e:
             return f"Error: {e}"
 
-    # CASE 2 — CONTEXT AVAILABLE → USE ROLE PROMPT
+    
     role_prompt = get_role_prompt(current_user.role)
 
     prompt = f"""

@@ -7,6 +7,3 @@ class BaseExtractor(ABC):
     def extract(self, path: str) -> str:
         raise NotImplementedError("Extractor must implement extract()")
 
-    # Optional helper for consistent error messages
-    def error(self, message: str) -> str:
-        return f"[{message}]"

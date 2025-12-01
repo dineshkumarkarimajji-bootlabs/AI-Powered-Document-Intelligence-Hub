@@ -25,4 +25,3 @@ class PDFExtractor(BaseExtractor):
             # Fallback even if PDF parsing fails
             return ImageExtractor().extract(path)
 
-            return ImageExtractor().extract(path)

@@ -7,10 +7,10 @@ def extract_text(file_path: str) -> str:
     Unified text extractor for PDF, DOCX, TXT, Images, Audio.
     Uses ExtractorFactory to pick the correct extractor.
     """
-    # Determine extension only for error display
+    
     ext = os.path.splitext(file_path)[1].lower()
 
-    # IMPORTANT: pass full file_path, NOT extension
+    
     extractor = ExtractorFactory.get_extractor(file_path)
 
     if extractor is None:

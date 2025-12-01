@@ -12,7 +12,7 @@ class SummarizerService:
     """
 
     def __init__(self, model_name: str = None):
-        # Model name (default: llama3)
+        
         self.model_name =  settings.OLLAMA_MODEL
 
 
@@ -68,7 +68,7 @@ class SummarizerService:
             {text}
             """
 
-        else:  # abstractive summary
+        else:  
             prompt = f"""
             Provide a clear and short summary for the following text:
 

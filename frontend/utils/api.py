@@ -1,6 +1,6 @@
 import requests
 
-BASE_URL = "http://localhost:8000"  # change if needed
+BASE_URL = "http://localhost:8000" 
 
 def signup(username, email, password, role):
     data = {"username": username, "email": email, "password": password, "role": role}

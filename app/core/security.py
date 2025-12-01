@@ -10,14 +10,14 @@ from app.models.db import get_db
 import uuid
 import hashlib
 
-# -------------------- JWT CONFIG --------------------
+# JWT CONFIG
 SECRET_KEY = "45a70544539124673fc8daf946a53a71b72daed29d8e5cf451bd669a40d3b390"
 REFRESH_SECRET_KEY="b1c3e8f4d5e6a7b8901234567890abcdef1234567890abcdef1234567890abcd"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
-REFRESH_TOKEN_EXPIRE_DAYS = 14
+REFRESH_TOKEN_EXPIRE_DAYS = 2
 
-# -------------------- Password Context --------------------
+# Password Context 
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 def hash_password(password: str) -> str:
@@ -26,14 +26,14 @@ def hash_password(password: str) -> str:
 def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
 
-# -------------------- Refresh Token Helpers --------------------
+#  Refresh Token Helpers 
 def hash_refresh_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 def verify_refresh_token(token: str, hashed: str) -> bool:
     return hashlib.sha256(token.encode()).hexdigest() == hashed
 
-# -------------------- ACCESS TOKEN --------------------
+# ACCESS TOKEN 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
@@ -43,7 +43,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-# -------------------- REFRESH TOKEN --------------------
+# REFRESH TOKEN 
 def create_refresh_token(data: dict):
     to_encode = data.copy()
     jti = str(uuid.uuid4())
@@ -53,7 +53,7 @@ def create_refresh_token(data: dict):
     token = jwt.encode(to_encode, REFRESH_SECRET_KEY, algorithm=ALGORITHM)
     return {"token": token, "jti": jti}
 
-# -------------------- OAUTH2 --------------------
+# OAUTH2
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 def get_current_user(
@@ -86,7 +86,7 @@ def get_current_user(
 
     return user
 
-# -------------------- ROLE CHECKS --------------------
+# ROLE CHECKS
 def admin_required(current_user: model.User = Depends(get_current_user)):
     if current_user.role != model.Roles.ADMIN:
         raise HTTPException(403, "Admin privileges required")

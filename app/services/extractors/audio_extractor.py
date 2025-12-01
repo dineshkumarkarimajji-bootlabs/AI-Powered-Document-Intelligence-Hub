@@ -27,5 +27,5 @@ class AudioExtractor(BaseExtractor):
             return "[Permission denied reading audio file]"
 
         except Exception as e:
-            # Optional: Return detailed error for debugging
+            
             return f"[Failed to transcribe audio: {str(e)}]"
